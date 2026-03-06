@@ -1,11 +1,36 @@
 import streamlit as st
 from PIL import Image, ImageDraw, ImageFont
 import io
+import base64
 
 # Configuración básica de la página
 st.set_page_config(page_title="Generador de Artes Deportivos", layout="centered")
 
 # --- FUNCIONES DE AYUDA ---
+
+# Función robusta para poner fondo con base64 (soluciona el problema de lectura)
+def get_base64_of_bin_file(bin_file):
+    try:
+        with open(bin_file, 'rb') as f:
+            data = f.read()
+        return base64.b64encode(data).decode()
+    except OSError:
+        return None
+
+def set_png_as_page_bg(png_file):
+    bin_str = get_base64_of_bin_file(png_file)
+    if bin_str:
+        page_bg_img = '''
+        <style>
+        .stApp {
+        background-image: url("data:image/png;base64,%s");
+        background-size: cover;
+        background-repeat: no-repeat;
+        background-attachment: fixed;
+        }
+        </style>
+        ''' % bin_str
+        st.markdown(page_bg_img, unsafe_allow_html=True)
 
 def formatear_celular(numero):
     # Asegura que solo haya números y formatea a: 096 888 6718
@@ -16,8 +41,12 @@ def formatear_celular(numero):
 
 def generar_arte(datos):
     # 1. Cargar la imagen base
-    base = Image.open("flyer_futbol.png").convert("RGBA")
-    draw = ImageDraw.Draw(base)
+    try:
+        base = Image.open("flyer_futbol.png").convert("RGBA")
+        draw = ImageDraw.Draw(base)
+    except OSError:
+        st.error("❌ No se encontró flyer_futbol.png. Asegúrate de que esté en la misma carpeta.")
+        return None
     
     # 2. Cargar las fuentes (Asegúrate de que los nombres de los archivos coincidan)
     try:
@@ -28,7 +57,7 @@ def generar_arte(datos):
         st.error("❌ No se encontraron los archivos .ttf. Asegúrate de que estén en la misma carpeta.")
         return None
 
-    # --- DIBUJAR CANTÓN Y RECUADRO ---
+    # --- DIBUJAR CANTÓN Y RECUADRO CON NUEVAS COORDENADAS ---
     texto_canton = f"CANTÓN {datos['canton']}"
     # Calcular el ancho del texto para redimensionar el recuadro
     ancho_texto = int(draw.textlength(texto_canton, font=font_canton))
@@ -41,34 +70,53 @@ def generar_arte(datos):
         recuadro = Image.open("recuadro_transparente.png").convert("RGBA")
         recuadro = recuadro.resize((ancho_cuadro, alto_cuadro))
         
-        # Posición del recuadro (Alineado a la derecha, ajusta 'y' si es necesario)
-        pos_x_cuadro = 1080 - ancho_cuadro - 50 # 50px de margen derecho
-        pos_y_cuadro = 450 # Ajusta esta altura según veas
+        # --- NUEVAS COORDENADAS RECUADRO ---
+        # 45px más a la derecha y 20px abajo.
+        # Anterior y_cuadro era 450. Nueva 450+20 = 470
+        pos_y_cuadro = 470 
+        
+        # Anterior x_cuadro era (1080 - ancho_cuadro - 50). 
+        # Para mover 45px a la derecha, reducimos el margen derecho de 50 a 5.
+        pos_x_cuadro = 1080 - ancho_cuadro - 5
         base.paste(recuadro, (pos_x_cuadro, pos_y_cuadro), recuadro)
         
-        # Posición del texto centrada dentro del cuadro
+        # Posición del texto centrada horizontalmente
         pos_x_texto = pos_x_cuadro + (padding_lateral // 2)
-        # Ajuste vertical fino para que quede en el centro de los 66px
-        pos_y_texto = pos_y_cuadro + 5 
+        # --- AJUSTE CENTRADO VERTICAL REAL ---
+        # Alto cuadro es 66. Fuente 45. Margen superior = (66-45)/2 = 10.5. Usaremos 10.
+        pos_y_texto = pos_y_cuadro + 10 
         draw.text((pos_x_texto, pos_y_texto), texto_canton, font=font_canton, fill="white")
     except OSError:
         st.error("❌ No se encontró recuadro_transparente.png")
 
-    # --- DIBUJAR DATOS INFERIORES ---
-    # Coordenadas aproximadas (AJUSTA ESTOS VALORES)
-    x_izq = 190  # Alineación izquierda (Celular y Nombre)
-    x_der = 660  # Alineación derecha (Comunidad/GAD y Nombre)
-    y_fila_1 = 1170 # Altura del celular y tipo de comunidad
-    y_fila_2 = 1225 # Altura del nombre del profe y nombre de comunidad
-
-    # Celular y Nombre Profe
+    # --- DIBUJAR DATOS INFERIORES CON NUEVAS COORDENADAS ---
+    x_izq = 190  # Alineación izquierda
+    
+    # --- NUEVAS COORDENADAS IZQUIERDA (CELULAR Y NOMBRE) ---
+    # Celular: Bajar 70px. Anterior y_fila_1 = 1170. Nueva = 1170+70 = 1240.
+    y_izq_fila_1 = 1240
     celular_formateado = formatear_celular(datos['celular'])
-    draw.text((x_izq, y_fila_1), celular_formateado, font=font_bold, fill="white")
-    draw.text((x_izq, y_fila_2), datos['nombre'], font=font_medium, fill="white")
+    draw.text((x_izq, y_izq_fila_1), celular_formateado, font=font_bold, fill="white")
 
-    # Tipo de lugar y Nombre de lugar
-    draw.text((x_der, y_fila_1), datos['tipo_lugar'], font=font_bold, fill="white")
-    draw.text((x_der, y_fila_2), datos['nombre_lugar'], font=font_bold, fill="white")
+    # Nombre: Separación reducida a 6/10 de la actual.
+    # Separación anterior era 1225 - 1170 = 55.
+    # Nueva separación = 55 * 0.6 = 33.
+    # Nueva y_izq_fila_2 = y_izq_fila_1 + 33 = 1240 + 33 = 1273.
+    y_izq_fila_2 = 1273
+    draw.text((x_izq, y_izq_fila_2), datos['nombre'], font=font_medium, fill="white")
+
+    # --- NUEVAS COORDENADAS DERECHA (TIPO Y NOMBRE LUGAR) ---
+    # Mover 82px a la derecha y 60px más abajo.
+    # Anterior x_der = 660. Nueva 660+82 = 742.
+    x_der = 742
+    
+    # Anterior y_fila_1 = 1170. Nueva y_der_fila_1 = 1170+60 = 1230.
+    y_der_fila_1 = 1230
+    draw.text((x_der, y_der_fila_1), datos['tipo_lugar'], font=font_bold, fill="white")
+    
+    # Anterior y_fila_2 = 1225. Nueva y_der_fila_2 = 1225+60 = 1285.
+    y_der_fila_2 = 1285
+    draw.text((x_der, y_der_fila_2), datos['nombre_lugar'], font=font_bold, fill="white")
 
     return base
 
@@ -80,17 +128,9 @@ if 'imagen_generada' not in st.session_state:
 
 # --- PÁGINA 1: FORMULARIO ---
 if st.session_state.pagina == 1:
-    # CSS para el fondo azul y centrar logos (Opcional, mejora visual)
-    st.markdown(
-        """
-        <style>
-        .stApp {
-            background-image: url("fondo_azul.png");
-            background-size: cover;
-        }
-        </style>
-        """, unsafe_allow_html=True
-    )
+    # --- FONDO AZUL ROBUSTO ---
+    # Lo ponemos dentro de la página 1 para que solo aparezca allí
+    set_png_as_page_bg("fondo_azul.png")
     
     # Mostrar logo principal centrado
     try:
@@ -114,11 +154,16 @@ if st.session_state.pagina == 1:
                 st.write("(Imagen flyer_firma no encontrada)")
                 
         with col_form:
+            # Estilo para los labels del formulario para que se lean sobre el azul
+            st.markdown("""<style>div[data-baseweb="input"] > div {color: white !important;}</style>""", unsafe_allow_html=True)
+            
             nombre = st.text_input("Nombre y Apellido del Entrenador")
             celular = st.text_input("Número de Celular (10 dígitos)", max_chars=10)
             canton = st.text_input("Cantón")
             
-            tipo_lugar = st.radio("Seleccione tipo:", ["Comunidad", "GAD"], horizontal=True)
+            # --- AGREGADO "LIGA" A LAS OPCIONES ---
+            st.markdown("<p style='color: white;'>Seleccione tipo:</p>", unsafe_allow_html=True)
+            tipo_lugar = st.radio("Tipo Lugar Label (Oculto)", ["Comunidad", "GAD", "LIGA"], horizontal=True, label_visibility="collapsed")
             nombre_lugar = st.text_input(f"Nombre de la {tipo_lugar} (Ej: Sarayunga)")
             
             if st.button("Generar Arte 🎨", type="primary", use_container_width=True):
@@ -169,4 +214,6 @@ elif st.session_state.pagina == 2:
         with col2:
             if st.button("⬅️ Volver y crear otro", use_container_width=True):
                 st.session_state.pagina = 1
+                # Limpiar imagen anterior al volver
+                st.session_state.imagen_generada = None
                 st.rerun()
