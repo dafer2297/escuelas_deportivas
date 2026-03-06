@@ -42,28 +42,25 @@ def generar_arte(datos):
         base = Image.open("flyer_futbol.png").convert("RGBA")
         draw = ImageDraw.Draw(base)
     except OSError:
-        st.error("❌ No se encontró flyer_futbol.png. Asegúrate de que esté en la misma carpeta.")
+        st.error("❌ No se encontró flyer_futbol.png.")
         return None
     
     try:
-        # Cargamos las fuentes estáticas (para la parte de abajo)
         font_bold = ImageFont.truetype("Canaro-Bold.ttf", 40)
         font_medium = ImageFont.truetype("Canaro-Medium.ttf", 38)
     except OSError:
         st.error("❌ No se encontraron los archivos .ttf.")
         return None
 
-    # --- DIBUJAR CANTÓN Y RECUADRO CON TAMAÑO DINÁMICO ---
+    # --- DIBUJAR CANTÓN Y RECUADRO ---
     texto_canton = f"CANTÓN {datos['canton']}"
     
-    # 1. Ajustes base del cuadro
     alto_cuadro = 66
     padding_lateral = 60
-    ancho_maximo_cuadro = int(1080 * 0.4) # 4/10 del flyer (432px)
+    ancho_maximo_cuadro = int(1080 * 0.4) 
     ancho_maximo_texto = ancho_maximo_cuadro - padding_lateral
     
-    # 2. Lógica para reducir la fuente si es muy grande
-    font_size = 45 # Tamaño inicial
+    font_size = 45 
     try:
         font_canton = ImageFont.truetype("Canaro-Black.ttf", font_size)
     except OSError:
@@ -72,28 +69,22 @@ def generar_arte(datos):
         
     ancho_texto = int(draw.textlength(texto_canton, font=font_canton))
     
-    # Mientras el texto sea más grande que el máximo permitido, bajamos el tamaño
     while ancho_texto > ancho_maximo_texto and font_size > 15:
         font_size -= 1
         font_canton = ImageFont.truetype("Canaro-Black.ttf", font_size)
         ancho_texto = int(draw.textlength(texto_canton, font=font_canton))
 
-    # Calculamos el ancho final del cuadro
     ancho_cuadro = ancho_texto + padding_lateral
     
-    # 3. Dibujar el recuadro
     try:
         recuadro = Image.open("recuadro_transparente.png").convert("RGBA")
         recuadro = recuadro.resize((ancho_cuadro, alto_cuadro))
         
         pos_y_cuadro = 470 
-        # A 45px del borde derecho del flyer (1080 - ancho_cuadro - 45)
         pos_x_cuadro = 1080 - ancho_cuadro - 45 
         base.paste(recuadro, (pos_x_cuadro, pos_y_cuadro), recuadro)
         
-        # 4. Dibujar el texto centrado
         pos_x_texto = pos_x_cuadro + (padding_lateral // 2)
-        # Centrado vertical dinámico basado en el tamaño de la fuente actual
         pos_y_texto = pos_y_cuadro + (alto_cuadro - font_size) // 2
         draw.text((pos_x_texto, pos_y_texto), texto_canton, font=font_canton, fill="white")
     except OSError:
@@ -103,19 +94,18 @@ def generar_arte(datos):
     
     # --- IZQUIERDA (CELULAR Y NOMBRE) ---
     x_izq = 190  
-    # Bajado 7px (Antes 1240, ahora 1247)
     y_izq_fila_1 = 1247
     celular_formateado = formatear_celular(datos['celular'])
     draw.text((x_izq, y_izq_fila_1), celular_formateado, font=font_bold, fill="white")
 
-    # Bajado 7px (Antes 1285, ahora 1292)
     y_izq_fila_2 = 1292
     draw.text((x_izq, y_izq_fila_2), datos['nombre'], font=font_medium, fill="white")
 
-    # --- DERECHA (TIPO Y NOMBRE LUGAR) ---
+    # --- DERECHA (TIPO Y NOMBRE LUGAR CON SALTO DE LÍNEA INTELIGENTE) ---
     x_der = 722
+    # El ancho máximo permitido es el ancho total (1080) menos la posición de inicio (722) menos el margen derecho (45)
+    max_ancho_der = 1080 - x_der - 45 # Equivale a 313px
     
-    # Lógica para mayúsculas/minúsculas de Comunidad/Liga/GAD
     if datos['tipo_lugar'] == "GAD":
         tipo_lugar_str = "GAD"
     elif datos['tipo_lugar'] == "LIGA":
@@ -123,13 +113,41 @@ def generar_arte(datos):
     else:
         tipo_lugar_str = "Comunidad"
         
-    # Bajado 18px (Antes 1205, ahora 1223)
-    y_der_fila_1 = 1223
+    # Lógica para dividir el nombre de la comunidad en líneas si es muy largo
+    palabras = datos['nombre_lugar'].split()
+    lineas_lugar = []
+    linea_actual = ""
+
+    for palabra in palabras:
+        # Probamos cómo quedaría la línea si le sumamos la palabra actual
+        prueba_linea = f"{linea_actual} {palabra}".strip()
+        ancho_prueba = int(draw.textlength(prueba_linea, font=font_bold))
+        
+        if ancho_prueba <= max_ancho_der:
+            # Si cabe, la añadimos a la línea actual
+            linea_actual = prueba_linea
+        else:
+            # Si no cabe, guardamos la línea que teníamos y empezamos una nueva
+            if linea_actual:
+                lineas_lugar.append(linea_actual)
+            linea_actual = palabra
+            
+    if linea_actual: # Guardar la última línea que se estaba armando
+        lineas_lugar.append(linea_actual)
+
+    # Calcular cuánto debemos subir los textos si hay más de 1 línea
+    # Si ocupa 2 líneas, subimos todo 40px (altura de la letra aprox)
+    ajuste_y = (len(lineas_lugar) - 1) * 40
+
+    # Dibujar "Comunidad / GAD / Liga" con el ajuste
+    y_der_fila_1 = 1223 - ajuste_y
     draw.text((x_der, y_der_fila_1), tipo_lugar_str, font=font_bold, fill="white")
     
-    # Bajado 18px (Antes 1245, ahora 1263)
-    y_der_fila_2 = 1263
-    draw.text((x_der, y_der_fila_2), datos['nombre_lugar'], font=font_bold, fill="white")
+    # Dibujar el nombre de la comunidad (línea por línea)
+    y_der_fila_2 = 1263 - ajuste_y
+    for linea in lineas_lugar:
+        draw.text((x_der, y_der_fila_2), linea, font=font_bold, fill="white")
+        y_der_fila_2 += 40 # Bajamos 40px para la siguiente línea de texto
 
     return base
 
