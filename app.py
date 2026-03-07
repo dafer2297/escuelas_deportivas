@@ -95,12 +95,10 @@ def generar_arte(datos):
     # --- IZQUIERDA (CELULAR Y NOMBRE) ---
     x_izq = 190  
     
-    # Subido 16px (Antes 1247, ahora 1231)
     y_izq_fila_1 = 1231
     celular_formateado = formatear_celular(datos['celular'])
     draw.text((x_izq, y_izq_fila_1), celular_formateado, font=font_bold, fill="white")
 
-    # Subido 16px (Antes 1292, ahora 1276)
     y_izq_fila_2 = 1276
     draw.text((x_izq, y_izq_fila_2), datos['nombre'], font=font_medium, fill="white")
 
@@ -108,10 +106,13 @@ def generar_arte(datos):
     x_der = 722
     max_ancho_der = 1080 - x_der - 45 
     
+    # NUEVA LÓGICA: Se agregó "Barrio"
     if datos['tipo_lugar'] == "GAD":
         tipo_lugar_str = "GAD"
     elif datos['tipo_lugar'] == "LIGA":
         tipo_lugar_str = "Liga"
+    elif datos['tipo_lugar'] == "BARRIO":
+        tipo_lugar_str = "Barrio"
     else:
         tipo_lugar_str = "Comunidad"
         
@@ -134,18 +135,17 @@ def generar_arte(datos):
         lineas_lugar.append(linea_actual)
 
     # --- AJUSTE DE ALTURA PARA MULTIPLES LINEAS ---
-    # Antes era * 40. Para que baje 17px el bloque, restamos 17 a esa subida (40 - 17 = 23)
     ajuste_y = (len(lineas_lugar) - 1) * 23
 
-    # Dibujar "Comunidad / GAD / Liga" con el nuevo ajuste
+    # Dibujar "Comunidad / GAD / Liga / Barrio" con el nuevo ajuste
     y_der_fila_1 = 1223 - ajuste_y
     draw.text((x_der, y_der_fila_1), tipo_lugar_str, font=font_bold, fill="white")
     
-    # Dibujar el nombre de la comunidad (línea por línea)
+    # Dibujar el nombre del lugar (línea por línea)
     y_der_fila_2 = 1263 - ajuste_y
     for linea in lineas_lugar:
         draw.text((x_der, y_der_fila_2), linea, font=font_bold, fill="white")
-        y_der_fila_2 += 40 # Este es el espacio entre "San José" y "De Raranga", se mantiene igual
+        y_der_fila_2 += 40 
 
     return base
 
@@ -187,7 +187,8 @@ if st.session_state.pagina == 1:
             canton = st.text_input("Cantón")
             
             st.markdown("<p style='color: white;'>Seleccione tipo:</p>", unsafe_allow_html=True)
-            tipo_lugar = st.radio("Tipo Lugar Label (Oculto)", ["Comunidad", "GAD", "LIGA"], horizontal=True, label_visibility="collapsed")
+            # NUEVO BOTÓN: Se agregó "BARRIO" a la lista de opciones
+            tipo_lugar = st.radio("Tipo Lugar Label (Oculto)", ["Comunidad", "GAD", "LIGA", "BARRIO"], horizontal=True, label_visibility="collapsed")
             nombre_lugar = st.text_input(f"Nombre del lugar (Ej: Sarayunga)")
             
             if st.button("Generar Arte 🎨", type="primary", use_container_width=True):
